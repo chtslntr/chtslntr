@@ -137,6 +137,15 @@ input, select {
 }
 input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 .form-actions { display: flex; gap: 8px; }
+label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 13px; min-height: 38px; }
+label.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+label.inline { flex-direction: row; align-items: center; gap: 8px; }
+.vest-field[hidden] { display: none; }
+.progress { width: 64px; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; }
+.progress > div { height: 100%; background: var(--accent); border-radius: 4px; }
+.table input.cell, .table select.cell { padding: 4px 6px; width: 80px; }
+.table select.cell { width: auto; }
+.tag-ok { color: #0aac23; }
 .form-actions.right { justify-content: flex-end; margin-top: 16px; }
 .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
 

@@ -33,7 +33,7 @@
   function demoState() {
     const s = emptyState();
     s.company = { name: 'Örnek Teknoloji A.Ş.', currency: 'TRY', optionPool: 1000000 };
-    s.classes.push({ id: 'seed', name: 'Seed İmtiyazlı', kind: 'preferred' });
+    s.classes.push({ id: 'seed', name: 'Seed İmtiyazlı', kind: 'preferred', liqMultiple: 1, participating: false, seniority: 1 });
     const add = (name, category) => { const id = uid(); s.stakeholders.push({ id, name, category, email: '' }); return id; };
     const ayse = add('Ayşe Yılmaz', 'founder');
     const mehmet = add('Mehmet Demir', 'founder');
@@ -41,14 +41,15 @@
     const fon = add('Anadolu Seed Fonu', 'investor');
     const zeynep = add('Zeynep Kaya', 'employee');
     const can = add('Can Öztürk', 'employee');
-    const iss = (stakeholderId, classId, shares, price, date, note) =>
-      s.issuances.push({ id: uid(), stakeholderId, classId, shares, price, date, note });
-    iss(ayse, 'common', 4000000, 0.01, '2023-02-01', 'Kuruluş');
-    iss(mehmet, 'common', 3500000, 0.01, '2023-02-01', 'Kuruluş');
+    const iss = (stakeholderId, classId, shares, price, date, note, vesting) =>
+      s.issuances.push({ id: uid(), stakeholderId, classId, shares, price, date, note, vesting: vesting || null });
+    const v4 = (start) => ({ start, months: 48, cliff: 12 });
+    iss(ayse, 'common', 4000000, 0.01, '2023-02-01', 'Kuruluş', v4('2023-02-01'));
+    iss(mehmet, 'common', 3500000, 0.01, '2023-02-01', 'Kuruluş', v4('2023-02-01'));
     iss(melek, 'common', 500000, 1, '2023-09-15', 'Melek yatırım');
     iss(fon, 'seed', 1250000, 4, '2024-06-10', 'Seed turu');
-    iss(zeynep, 'options', 300000, 1, '2024-08-01', '4 yıl vesting, 1 yıl cliff');
-    iss(can, 'options', 150000, 1, '2025-01-15', '4 yıl vesting, 1 yıl cliff');
+    iss(zeynep, 'options', 300000, 1, '2024-08-01', 'ESOP hibesi', v4('2024-08-01'));
+    iss(can, 'options', 150000, 1, '2025-01-15', 'ESOP hibesi', v4('2025-01-15'));
     return s;
   }
 
@@ -145,9 +146,15 @@
     if (!c.fullyDiluted) { el.innerHTML = '<p class="muted">Henüz pay kaydı yok. “İşlemler” sekmesinden ekleyin.</p>'; return; }
     const segs = Object.entries(CATEGORIES).map(([k, meta]) => ({ key: k, label: meta.label, color: `var(${meta.color})`, value: c.byCategory[k] }));
     segs.push({ key: 'pool', label: 'Ayrılmamış havuz', color: 'var(--cat-pool)', value: c.poolUnallocated });
-    const visible = segs.filter((s) => s.value > 0).map((s) => ({ ...s, pct: s.value / c.fullyDiluted }));
+    renderStack(el, segs, c.fullyDiluted,
+      (s) => `<div class="t-row"><span>Pay</span><span>${fmtN(s.value)}</span></div><div class="t-row"><span>Oran</span><span>${fmtPct(s.pct)}</span></div>`);
+  }
+
+  function renderStack(el, segs, total, tipRows) {
+    const visible = segs.filter((s) => s.value > 0).map((s) => ({ ...s, pct: total ? s.value / total : 0 }));
+    if (!visible.length) { el.innerHTML = ''; return; }
     el.innerHTML = `
-      <div class="stack" role="img" aria-label="Kategoriye göre sahiplik dağılımı">
+      <div class="stack" role="img" aria-label="${visible.map((s) => `${s.label} ${fmtPct(s.pct)}`).join(', ')}">
         ${visible.map((s) => `<div class="seg" data-key="${s.key}" style="flex:${s.value} 1 0;background:${s.color}"></div>`).join('')}
       </div>
       <div class="stack-labels">
@@ -156,9 +163,7 @@
       <div class="legend">${visible.map((s) => `<span><span class="swatch" style="background:${s.color}"></span>${s.label}<b>${fmtPct(s.pct)}</b></span>`).join('')}</div>`;
     el.querySelectorAll('.seg').forEach((g) => {
       const p = visible.find((q) => q.key === g.dataset.key);
-      bindTooltip(g, () => `<div class="t-title"><span class="swatch" style="background:${p.color}"></span>${p.label}</div>
-        <div class="t-row"><span>Pay</span><span>${fmtN(p.value)}</span></div>
-        <div class="t-row"><span>Oran</span><span>${fmtPct(p.pct)}</span></div>`);
+      bindTooltip(g, () => `<div class="t-title"><span class="swatch" style="background:${p.color}"></span>${p.label}</div>${tipRows(p)}`);
     });
   }
 
@@ -245,7 +250,7 @@
     const list = [...state.issuances].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
     if (!list.length) { t.innerHTML = '<tbody><tr><td class="empty">Henüz işlem yok.</td></tr></tbody>'; return; }
     t.innerHTML = `
-      <thead><tr><th>Tarih</th><th>Hissedar</th><th>Pay sınıfı</th><th class="num">Adet</th><th class="num">Pay başı fiyat</th><th class="num">Tutar</th><th>Not</th><th></th></tr></thead>
+      <thead><tr><th>Tarih</th><th>Hissedar</th><th>Pay sınıfı</th><th class="num">Adet</th><th class="num">Pay başı fiyat</th><th class="num">Tutar</th><th>Vesting</th><th>Not</th><th></th></tr></thead>
       <tbody>${list.map((i) => {
         const s = stakeholderById(i.stakeholderId), k = classById(i.classId);
         return `<tr>
@@ -255,6 +260,7 @@
           <td class="num">${fmtN(i.shares)}</td>
           <td class="num">${i.price ? fmtMoney(i.price, true) : '—'}</td>
           <td class="num">${i.price ? fmtMoney(i.shares * i.price, true) : '—'}</td>
+          <td class="muted">${i.vesting && i.vesting.months ? `${i.vesting.months} ay / ${i.vesting.cliff || 0} ay cliff` : '—'}</td>
           <td class="muted">${esc(i.note) || ''}</td>
           <td class="num"><button class="btn icon danger" data-del-issuance="${i.id}">Sil</button></td>
         </tr>`;
@@ -266,17 +272,11 @@
     const f = document.getElementById('roundForm');
     const pre = parseFloat(f.preMoney.value) || 0;
     const inv = parseFloat(f.investment.value) || 0;
-    const t = Math.min(0.5, Math.max(0, (parseFloat(f.poolTarget.value) || 0) / 100));
-    const F = c.fullyDiluted, U = c.poolUnallocated;
-    if (!pre || !F) return null;
-    const post = pre + inv;
-    // Havuz yatırım öncesine eklenir: (U + P) / toplam_sonra = t
-    const k = t * post / pre;
-    const P = k < 1 ? Math.max(0, Math.round((k * F - U) / (1 - k))) : 0;
-    const price = pre / (F + P);
-    const I = Math.round(inv / price);
-    const totalAfter = F + P + I;
-    return { pre, inv, post, P, price, I, totalAfter, name: f.name.value || 'Yeni tur', investor: f.investor.value || 'Yeni Yatırımcı' };
+    const r = Calc.simulateRound({ fullyDiluted: c.fullyDiluted, poolUnallocated: c.poolUnallocated,
+      preMoney: pre, investment: inv, poolTarget: (parseFloat(f.poolTarget.value) || 0) / 100 });
+    if (!r) return null;
+    return { pre, inv, post: r.post, P: r.poolAdded, price: r.price, I: r.newShares, totalAfter: r.totalAfter,
+      name: f.name.value || 'Yeni tur', investor: f.investor.value || 'Yeni Yatırımcı' };
   }
 
   function renderRound(c) {
@@ -318,7 +318,7 @@
     if (!confirm(`${r.name} turu tabloya işlenecek: ${r.investor} için ${fmtN(r.I)} pay ve havuza ${fmtN(r.P)} pay eklenecek. Devam edilsin mi?`)) return;
     const className = `${r.name} İmtiyazlı`;
     let cls = state.classes.find((k) => k.name === className);
-    if (!cls) { cls = { id: uid(), name: className, kind: 'preferred' }; state.classes.push(cls); }
+    if (!cls) { cls = { id: uid(), name: className, kind: 'preferred', liqMultiple: 1, participating: false, seniority: 1 + state.classes.filter((k) => k.kind === 'preferred').length }; state.classes.push(cls); }
     let inv = state.stakeholders.find((s) => s.name === r.investor);
     if (!inv) { inv = { id: uid(), name: r.investor, category: 'investor', email: '' }; state.stakeholders.push(inv); }
     state.issuances.push({ id: uid(), stakeholderId: inv.id, classId: cls.id, shares: r.I, price: Math.round(r.price * 10000) / 10000,
@@ -338,9 +338,128 @@
     }
     const used = new Set(state.issuances.map((i) => i.classId));
     document.getElementById('classTable').innerHTML = `
-      <thead><tr><th>Sınıf</th><th>Tür</th><th></th></tr></thead>
+      <thead><tr><th>Sınıf</th><th>Tür</th><th class="num">Tasfiye tercihi (×)</th><th>Katılım</th><th class="num">Kıdem</th><th></th></tr></thead>
       <tbody>${state.classes.map((k) => `<tr><td>${esc(k.name)}</td><td><span class="pill">${CLASS_KINDS[k.kind]}</span></td>
+        ${k.kind === 'preferred' ? `
+          <td class="num"><input class="cell" type="number" min="0" step="0.25" value="${k.liqMultiple ?? 1}" data-class-field="liqMultiple" data-class-id="${k.id}" aria-label="Tasfiye tercihi çarpanı"></td>
+          <td><select class="cell" data-class-field="participating" data-class-id="${k.id}" aria-label="Katılım">
+            <option value="0" ${!k.participating ? 'selected' : ''}>Katılımsız</option>
+            <option value="1" ${k.participating ? 'selected' : ''}>Katılımlı</option></select></td>
+          <td class="num"><input class="cell" type="number" min="1" step="1" value="${k.seniority || 1}" data-class-field="seniority" data-class-id="${k.id}" aria-label="Kıdem"></td>`
+        : '<td class="num muted">—</td><td class="muted">—</td><td class="num muted">—</td>'}
         <td class="num">${used.has(k.id) ? '<span class="muted small">Kullanımda</span>' : `<button class="btn icon danger" data-del-class="${k.id}">Sil</button>`}</td></tr>`).join('')}</tbody>`;
+  }
+
+  // ---------- Vesting ----------
+  function today() { const d = new Date(); return Calc.addMonths(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, 0); }
+
+  function renderVesting() {
+    const asOf = document.getElementById('vestAsOf').value || today();
+    const list = state.issuances.filter((i) => i.vesting && i.vesting.months)
+      .map((i) => ({ i, s: stakeholderById(i.stakeholderId), k: classById(i.classId), vested: Calc.vestedShares(i, asOf) }))
+      .filter((x) => x.s && x.k)
+      .sort((a, b) => (a.s.name > b.s.name ? 1 : -1));
+    const tot = list.reduce((a, x) => a + x.i.shares, 0), ves = list.reduce((a, x) => a + x.vested, 0);
+    document.getElementById('vestKpis').innerHTML = [
+      ['Vesting\'e tabi pay', fmtN(tot)],
+      ['Hak edilmiş', fmtN(ves)],
+      ['Hak edilmemiş', fmtN(tot - ves)],
+      ['Genel ilerleme', fmtPct(tot ? ves / tot : 0)],
+    ].map(([l, v]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div></div>`).join('');
+    const t = document.getElementById('vestTable');
+    if (!list.length) { t.innerHTML = '<tbody><tr><td class="empty">Vesting tanımlı işlem yok. İşlemler sekmesinde “Vesting uygula” seçeneğini kullanın.</td></tr></tbody>'; return; }
+    t.innerHTML = `
+      <thead><tr><th>Hissedar</th><th>Pay sınıfı</th><th>Başlangıç</th><th class="num">Süre / Cliff</th><th class="num">Toplam</th><th class="num">Hak edilmiş</th><th class="num">Kalan</th><th>İlerleme</th><th>Sonraki hak ediş</th><th>Bitiş</th></tr></thead>
+      <tbody>${list.map((x) => {
+        const p = x.vested / x.i.shares;
+        const next = Calc.nextVestDate(x.i, asOf);
+        const cliffPending = Calc.monthsBetween(x.i.vesting.start, asOf) < (x.i.vesting.cliff || 0);
+        return `<tr>
+          <td>${esc(x.s.name)}</td><td>${esc(x.k.name)}</td><td>${esc(x.i.vesting.start)}</td>
+          <td class="num">${x.i.vesting.months} ay / ${x.i.vesting.cliff || 0} ay</td>
+          <td class="num">${fmtN(x.i.shares)}</td><td class="num">${fmtN(x.vested)}</td><td class="num">${fmtN(x.i.shares - x.vested)}</td>
+          <td><span class="progress" role="progressbar" aria-valuenow="${Math.round(p * 100)}" aria-valuemin="0" aria-valuemax="100"><div style="width:${p * 100}%"></div></span> <span class="small muted">${fmtPct(p)}</span></td>
+          <td>${next ? esc(next) + (cliffPending ? ' <span class="pill">cliff</span>' : '') : '<span class="tag-ok">Tamamlandı</span>'}</td>
+          <td>${esc(Calc.vestingEnd(x.i))}</td>
+        </tr>`;
+      }).join('')}</tbody>`;
+  }
+
+  // ---------- Çıkış analizi ----------
+  function renderExit(c) {
+    const f = document.getElementById('exitForm');
+    const exit = Math.max(0, parseFloat(f.value.value) || 0);
+    const vestedOnly = f.vestedOnly.checked;
+    const asOf = today();
+    const positions = state.issuances
+      .filter((i) => stakeholderById(i.stakeholderId) && classById(i.classId))
+      .map((i) => ({ iss: i, classId: i.classId, price: i.price || 0,
+        shares: vestedOnly && classById(i.classId).kind === 'option' ? Calc.vestedShares(i, asOf) : i.shares }))
+      .filter((p) => p.shares > 0);
+    const kpis = document.getElementById('exitKpis'), chart = document.getElementById('exitChart');
+    const t = document.getElementById('exitTable'), tc = document.getElementById('exitClassTable');
+    if (!positions.length) {
+      kpis.innerHTML = ''; chart.innerHTML = '';
+      t.innerHTML = tc.innerHTML = '<tbody><tr><td class="empty">Hesaplama için pay kaydı gerekli.</td></tr></tbody>';
+      return;
+    }
+    const r = Calc.waterfall(positions, state.classes, exit);
+    const prefTotal = r.prefPaid.reduce((a, b) => a + b, 0);
+
+    // Hissedar bazında topla
+    const per = new Map();
+    positions.forEach((p, idx) => {
+      const id = p.iss.stakeholderId;
+      const row = per.get(id) || { s: stakeholderById(id), shares: 0, payout: 0, invested: 0, pref: 0 };
+      row.shares += p.shares; row.payout += r.payouts[idx]; row.pref += r.prefPaid[idx];
+      if (classById(p.classId).kind !== 'option') row.invested += p.shares * p.price;
+      per.set(id, row);
+    });
+    const rows = [...per.values()].sort((a, b) => b.payout - a.payout);
+
+    kpis.innerHTML = [
+      ['Adi pay başı değer', fmtMoney(r.pps, true)],
+      ['Tasfiye tercihi ödemeleri', fmtMoney(prefTotal)],
+      ['Adi paylara kalan', fmtMoney(exit - prefTotal - r.unallocated)],
+      ['Kurucuların payı', fmtMoney(rows.filter((x) => x.s.category === 'founder').reduce((a, x) => a + x.payout, 0))],
+    ].map(([l, v]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div></div>`).join('');
+
+    // Kategori grafiği (Özet ile aynı bileşen)
+    const byCat = {};
+    rows.forEach((x) => { const k = x.s.category in CATEGORIES ? x.s.category : 'other'; byCat[k] = (byCat[k] || 0) + x.payout; });
+    renderStack(chart, Object.entries(CATEGORIES).map(([k, m]) => ({ key: k, label: m.label, color: `var(${m.color})`, value: byCat[k] || 0 })), exit,
+      (s) => `<div class="t-row"><span>Tutar</span><span>${fmtMoney(s.value)}</span></div><div class="t-row"><span>Oran</span><span>${fmtPct(s.pct)}</span></div>`);
+
+    t.innerHTML = `
+      <thead><tr><th>Hissedar</th><th>Kategori</th><th class="num">Pay</th><th class="num">Tercih ödemesi</th><th class="num">Toplam alacak</th><th class="num">% Satış bedeli</th><th class="num">Yatırım</th><th class="num">Getiri (×)</th></tr></thead>
+      <tbody>${rows.map((x) => `<tr>
+        <td><span class="swatch" style="background:var(${(CATEGORIES[x.s.category] || CATEGORIES.other).color})"></span>${esc(x.s.name)}</td>
+        <td><span class="pill">${(CATEGORIES[x.s.category] || CATEGORIES.other).single}</span></td>
+        <td class="num">${fmtN(x.shares)}</td>
+        <td class="num">${x.pref ? fmtMoney(x.pref) : '—'}</td>
+        <td class="num"><b>${fmtMoney(x.payout)}</b></td>
+        <td class="num">${fmtPct(exit ? x.payout / exit : 0)}</td>
+        <td class="num">${x.invested ? fmtMoney(x.invested) : '—'}</td>
+        <td class="num">${x.invested >= 1 ? nf2.format(x.payout / x.invested) + '×' : '—'}</td>
+      </tr>`).join('')}</tbody>
+      <tfoot><tr><td>Toplam</td><td></td><td></td><td class="num">${fmtMoney(prefTotal)}</td><td class="num">${fmtMoney(exit - r.unallocated)}</td><td class="num">${fmtPct(exit ? (exit - r.unallocated) / exit : 0)}</td><td></td><td></td></tr></tfoot>`;
+
+    tc.innerHTML = `
+      <thead><tr><th>Pay sınıfı</th><th>Tür</th><th class="num">Pay</th><th>Koşullar</th><th>Karar</th><th class="num">Toplam alacak</th></tr></thead>
+      <tbody>${state.classes.filter((k) => positions.some((p) => p.classId === k.id)).map((k) => {
+        const shares = positions.filter((p) => p.classId === k.id).reduce((a, p) => a + p.shares, 0);
+        let terms = '—', decision = '—';
+        if (k.kind === 'preferred') {
+          terms = `${nf2.format(k.liqMultiple ?? 1)}× · ${k.participating ? 'katılımlı' : 'katılımsız'} · kıdem ${k.seniority || 1}`;
+          decision = k.participating ? 'Tercih + katılım' : r.convert[k.id] ? 'Adi paya dönüşür' : 'Tercih tutarını alır';
+        } else if (k.kind === 'option') {
+          const itm = positions.filter((p, idx) => p.classId === k.id && r.inTheMoney.has(idx)).length;
+          const all = positions.filter((p) => p.classId === k.id).length;
+          decision = itm === all ? 'Kullanılır' : itm ? 'Kısmen kullanılır' : 'Para dışında';
+        }
+        return `<tr><td>${esc(k.name)}</td><td><span class="pill">${CLASS_KINDS[k.kind]}</span></td><td class="num">${fmtN(shares)}</td>
+          <td class="muted">${terms}</td><td>${decision}</td><td class="num">${fmtMoney(r.byClass[k.id] || 0)}</td></tr>`;
+      }).join('')}</tbody>`;
   }
 
   // ---------- Genel ----------
@@ -353,6 +472,8 @@
     renderStakeholders(c);
     renderLedger(c);
     renderRound(c);
+    renderVesting();
+    renderExit(c);
     renderSettings();
   }
   function commit(msg) { save(); render(); if (msg) toast(msg); }
@@ -426,13 +547,33 @@
         if (shares > c.poolUnallocated && !confirm(`Bu hibe havuzda kalan ${fmtN(c.poolUnallocated)} payı aşıyor. Havuz otomatik büyütülsün mü?`)) return;
         if (shares > c.poolUnallocated) state.company.optionPool += shares - c.poolUnallocated;
       }
+      const vesting = f.hasVesting.checked && parseInt(f.vestMonths.value, 10) > 0
+        ? { start: f.vestStart.value || f.date.value, months: parseInt(f.vestMonths.value, 10), cliff: Math.max(0, parseInt(f.vestCliff.value, 10) || 0) }
+        : null;
       state.issuances.push({ id: uid(), stakeholderId: f.stakeholderId.value, classId: f.classId.value, shares,
-        price: parseFloat(f.price.value) || 0, date: f.date.value, note: f.note.value.trim() });
-      f.shares.value = ''; f.price.value = ''; f.note.value = '';
+        price: parseFloat(f.price.value) || 0, date: f.date.value, note: f.note.value.trim(), vesting });
+      f.shares.value = ''; f.price.value = ''; f.note.value = ''; f.vestStart.value = '';
       commit('İşlem kaydedildi.');
     });
 
+    const issForm = document.getElementById('issuanceForm');
+    const syncVest = () => {
+      issForm.querySelectorAll('.vest-field').forEach((el) => { el.hidden = !issForm.hasVesting.checked; });
+    };
+    issForm.classId.addEventListener('change', () => {
+      issForm.hasVesting.checked = classById(issForm.classId.value)?.kind === 'option';
+      syncVest();
+    });
+    issForm.hasVesting.addEventListener('change', syncVest);
+    issForm.hasVesting.checked = classById(issForm.classId.value)?.kind === 'option';
+    syncVest();
+
     document.getElementById('roundForm').addEventListener('input', () => renderRound(compute()));
+    document.getElementById('exitForm').addEventListener('input', () => renderExit(compute()));
+    document.getElementById('exitForm').addEventListener('submit', (e) => e.preventDefault());
+    const asOf = document.getElementById('vestAsOf');
+    asOf.value = today();
+    asOf.addEventListener('input', () => renderVesting());
     document.getElementById('applyRound').addEventListener('click', applyRound);
 
     document.getElementById('companyForm').addEventListener('submit', (e) => {
@@ -448,7 +589,9 @@
     document.getElementById('classForm').addEventListener('submit', (e) => {
       e.preventDefault();
       const f = e.target;
-      state.classes.push({ id: uid(), name: f.name.value.trim(), kind: f.kind.value });
+      const kind = f.kind.value;
+      state.classes.push(Object.assign({ id: uid(), name: f.name.value.trim(), kind },
+        kind === 'preferred' ? { liqMultiple: 1, participating: false, seniority: 1 } : {}));
       f.reset();
       commit('Pay sınıfı eklendi.');
     });
@@ -472,6 +615,16 @@
       }
     });
     document.body.addEventListener('change', (e) => {
+      const cf = e.target.dataset?.classField;
+      if (cf) {
+        const k = classById(e.target.dataset.classId);
+        if (!k) return;
+        if (cf === 'participating') k.participating = e.target.value === '1';
+        else if (cf === 'liqMultiple') k.liqMultiple = Math.max(0, parseFloat(e.target.value) || 0);
+        else if (cf === 'seniority') k.seniority = Math.max(1, parseInt(e.target.value, 10) || 1);
+        commit('Pay sınıfı güncellendi.');
+        return;
+      }
       const id = e.target.dataset?.cat;
       if (!id) return;
       const s = stakeholderById(id);

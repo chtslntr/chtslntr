@@ -28,7 +28,9 @@
       <button class="tab active" data-tab="overview" role="tab">Özet</button>
       <button class="tab" data-tab="stakeholders" role="tab">Hissedarlar</button>
       <button class="tab" data-tab="ledger" role="tab">İşlemler</button>
+      <button class="tab" data-tab="vesting" role="tab">Vesting</button>
       <button class="tab" data-tab="round" role="tab">Tur Simülasyonu</button>
+      <button class="tab" data-tab="exit" role="tab">Çıkış Analizi</button>
       <button class="tab" data-tab="settings" role="tab">Ayarlar</button>
     </nav>
     <button class="theme-toggle" id="themeToggle" title="Tema değiştir" aria-label="Tema değiştir">
@@ -94,7 +96,11 @@
           <label>Adet<input name="shares" type="number" min="1" step="1" required placeholder="10000"></label>
           <label>Pay başı fiyat<input name="price" type="number" min="0" step="any" placeholder="0,00"></label>
           <label>Tarih<input name="date" type="date" required></label>
-          <label>Not<input name="note" placeholder="Seed turu, vesting 4 yıl…"></label>
+          <label>Not<input name="note" placeholder="Seed turu, ESOP hibesi…"></label>
+          <label class="check"><input type="checkbox" name="hasVesting"> Vesting uygula</label>
+          <label class="vest-field">Vesting başlangıcı<input name="vestStart" type="date"></label>
+          <label class="vest-field">Süre (ay)<input name="vestMonths" type="number" min="1" step="1" value="48"></label>
+          <label class="vest-field">Cliff (ay)<input name="vestCliff" type="number" min="0" step="1" value="12"></label>
           <div class="form-actions"><button class="btn primary" type="submit">Kaydet</button></div>
         </form>
         <p class="muted small" id="poolHint"></p>
@@ -102,6 +108,19 @@
       <div class="card">
         <div class="card-head"><h2>İşlem geçmişi</h2></div>
         <div class="table-wrap"><table class="table" id="ledgerTable"></table></div>
+      </div>
+    </section>
+
+    <!-- VESTING -->
+    <section class="panel" id="tab-vesting">
+      <div class="card">
+        <div class="card-head">
+          <h2>Hak ediş (vesting) durumu</h2>
+          <label class="inline">Tarih itibarıyla <input type="date" id="vestAsOf"></label>
+        </div>
+        <div id="vestKpis" class="kpis compact"></div>
+        <div class="table-wrap"><table class="table" id="vestTable"></table></div>
+        <p class="muted small">Hak ediş aylık hesaplanır; cliff süresi dolduğunda o güne kadar biriken kısım bir kerede açılır. Vesting tanımlanmamış işlemler tamamen hak edilmiş sayılır.</p>
       </div>
     </section>
 
@@ -124,6 +143,31 @@
         <div class="form-actions right">
           <button class="btn primary" id="applyRound">Turu tabloya uygula</button>
         </div>
+      </div>
+    </section>
+
+    <!-- ÇIKIŞ ANALİZİ -->
+    <section class="panel" id="tab-exit">
+      <div class="card">
+        <div class="card-head">
+          <h2>Çıkış (exit) analizi</h2>
+          <span class="muted small">Şirket satışında tasfiye tercihlerine göre dağılım</span>
+        </div>
+        <form id="exitForm" class="form-grid">
+          <label>Satış bedeli (net)<input name="value" type="number" min="0" step="any" value="100000000"></label>
+          <label class="check"><input type="checkbox" name="vestedOnly"> Yalnızca hak edilmiş opsiyonlar</label>
+        </form>
+        <div id="exitKpis" class="kpis compact"></div>
+        <div id="exitChart" class="chart"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Hissedar bazında</h2></div>
+        <div class="table-wrap"><table class="table" id="exitTable"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Pay sınıfı bazında</h2></div>
+        <div class="table-wrap"><table class="table" id="exitClassTable"></table></div>
+        <p class="muted small">Katılımsız imtiyazlı paylar, tercih tutarını almak ile adi paya dönüşmek arasından kendi lehine olanı seçer. Opsiyonlar yalnızca pay başı değer kullanım fiyatını aşıyorsa dahil edilir. Tasfiye tercihi koşulları Ayarlar → Pay sınıfları bölümünden düzenlenir.</p>
       </div>
     </section>
 
@@ -174,6 +218,7 @@
 
   <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
   <div class="toast" id="toast" hidden></div>
+  <script src="calc.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
