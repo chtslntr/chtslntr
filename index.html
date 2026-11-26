@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hisse Defteri</title>
+  <meta name="description" content="Şirketinizin ortaklık yapısını (cap table) yönetin, yatırım turlarını simüle edin.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+        <rect x="2" y="2" width="24" height="24" rx="7" fill="var(--accent)"/>
+        <rect x="7" y="15" width="3" height="6" rx="1.5" fill="#fff"/>
+        <rect x="12.5" y="11" width="3" height="10" rx="1.5" fill="#fff"/>
+        <rect x="18" y="7" width="3" height="14" rx="1.5" fill="#fff"/>
+      </svg>
+      <div>
+        <div class="brand-name">Hisse Defteri</div>
+        <div class="company-name" id="companyLabel">—</div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="overview" role="tab">Özet</button>
+      <button class="tab" data-tab="stakeholders" role="tab">Hissedarlar</button>
+      <button class="tab" data-tab="ledger" role="tab">İşlemler</button>
+      <button class="tab" data-tab="round" role="tab">Tur Simülasyonu</button>
+      <button class="tab" data-tab="settings" role="tab">Ayarlar</button>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" title="Tema değiştir" aria-label="Tema değiştir">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <!-- ÖZET -->
+    <section class="panel active" id="tab-overview">
+      <div class="kpis" id="kpis"></div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Kategoriye göre sahiplik</h2>
+          <span class="muted small">Tam seyreltilmiş (fully diluted)</span>
+        </div>
+        <div id="categoryChart" class="chart"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Ortaklık tablosu</h2>
+          <div class="actions">
+            <button class="btn ghost" id="exportCsv">CSV indir</button>
+          </div>
+        </div>
+        <div class="table-wrap"><table class="table" id="capTable"></table></div>
+      </div>
+    </section>
+
+    <!-- HİSSEDARLAR -->
+    <section class="panel" id="tab-stakeholders">
+      <div class="card">
+        <div class="card-head"><h2>Yeni hissedar</h2></div>
+        <form id="stakeholderForm" class="form-grid">
+          <label>Ad Soyad / Unvan<input name="name" required placeholder="Ayşe Yılmaz"></label>
+          <label>Kategori
+            <select name="category">
+              <option value="founder">Kurucu</option>
+              <option value="investor">Yatırımcı</option>
+              <option value="employee">Çalışan</option>
+              <option value="other">Diğer</option>
+            </select>
+          </label>
+          <label>E-posta (opsiyonel)<input name="email" type="email" placeholder="ornek@firma.com"></label>
+          <div class="form-actions"><button class="btn primary" type="submit">Ekle</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Hissedarlar</h2></div>
+        <div class="table-wrap"><table class="table" id="stakeholderTable"></table></div>
+      </div>
+    </section>
+
+    <!-- İŞLEMLER -->
+    <section class="panel" id="tab-ledger">
+      <div class="card">
+        <div class="card-head"><h2>Yeni işlem</h2></div>
+        <form id="issuanceForm" class="form-grid">
+          <label>Hissedar<select name="stakeholderId" required></select></label>
+          <label>Pay sınıfı<select name="classId" required></select></label>
+          <label>Adet<input name="shares" type="number" min="1" step="1" required placeholder="10000"></label>
+          <label>Pay başı fiyat<input name="price" type="number" min="0" step="any" placeholder="0,00"></label>
+          <label>Tarih<input name="date" type="date" required></label>
+          <label>Not<input name="note" placeholder="Seed turu, vesting 4 yıl…"></label>
+          <div class="form-actions"><button class="btn primary" type="submit">Kaydet</button></div>
+        </form>
+        <p class="muted small" id="poolHint"></p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>İşlem geçmişi</h2></div>
+        <div class="table-wrap"><table class="table" id="ledgerTable"></table></div>
+      </div>
+    </section>
+
+    <!-- TUR SİMÜLASYONU -->
+    <section class="panel" id="tab-round">
+      <div class="card">
+        <div class="card-head">
+          <h2>Yatırım turu simülasyonu</h2>
+          <span class="muted small">Opsiyon havuzu yatırım öncesi değerlemeye dahil edilir</span>
+        </div>
+        <form id="roundForm" class="form-grid">
+          <label>Tur adı<input name="name" value="Seri A"></label>
+          <label>Yatırımcı adı<input name="investor" value="Yeni Yatırımcı"></label>
+          <label>Yatırım öncesi değerleme<input name="preMoney" type="number" min="1" step="any" value="40000000"></label>
+          <label>Yatırım tutarı<input name="investment" type="number" min="0" step="any" value="10000000"></label>
+          <label>Hedef opsiyon havuzu (tur sonrası %)<input name="poolTarget" type="number" min="0" max="50" step="0.1" value="10"></label>
+        </form>
+        <div id="roundSummary" class="kpis compact"></div>
+        <div class="table-wrap"><table class="table" id="roundTable"></table></div>
+        <div class="form-actions right">
+          <button class="btn primary" id="applyRound">Turu tabloya uygula</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- AYARLAR -->
+    <section class="panel" id="tab-settings">
+      <div class="card">
+        <div class="card-head"><h2>Şirket</h2></div>
+        <form id="companyForm" class="form-grid">
+          <label>Şirket adı<input name="name" required></label>
+          <label>Para birimi
+            <select name="currency">
+              <option value="TRY">TRY (₺)</option>
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+            </select>
+          </label>
+          <label>Opsiyon havuzu (ayrılmış toplam pay)<input name="optionPool" type="number" min="0" step="1"></label>
+          <div class="form-actions"><button class="btn primary" type="submit">Kaydet</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Pay sınıfları</h2></div>
+        <form id="classForm" class="form-grid">
+          <label>Sınıf adı<input name="name" required placeholder="Seri A İmtiyazlı"></label>
+          <label>Tür
+            <select name="kind">
+              <option value="common">Adi pay</option>
+              <option value="preferred">İmtiyazlı pay</option>
+              <option value="option">Opsiyon</option>
+            </select>
+          </label>
+          <div class="form-actions"><button class="btn primary" type="submit">Sınıf ekle</button></div>
+        </form>
+        <div class="table-wrap"><table class="table" id="classTable"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Veri</h2></div>
+        <p class="muted">Verileriniz yalnızca bu tarayıcıda saklanır. Yedek almak için dışa aktarın.</p>
+        <div class="button-row">
+          <button class="btn" id="exportJson">JSON dışa aktar</button>
+          <label class="btn">JSON içe aktar<input type="file" id="importJson" accept="application/json" hidden></label>
+          <button class="btn" id="loadDemo">Örnek veri yükle</button>
+          <button class="btn danger" id="resetAll">Tümünü sil</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+  <div class="toast" id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
