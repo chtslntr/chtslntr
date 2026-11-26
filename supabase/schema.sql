@@ -68,6 +68,13 @@ as $$
   select coalesce(public.company_role(cid) = any (roles), false)
 $$;
 
+-- RLS kuralları bu fonksiyonları oturum açan kullanıcı adına çağırır; Supabase'de
+-- "yeni tablolara/fonksiyonlara otomatik API erişimi" kapalıysa izin açıkça verilmelidir.
+revoke all on function public.company_role(uuid) from public, anon;
+revoke all on function public.has_company_role(uuid, text[]) from public, anon;
+grant execute on function public.company_role(uuid) to authenticated;
+grant execute on function public.has_company_role(uuid, text[]) to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Tetikleyiciler
 -- ---------------------------------------------------------------------------
@@ -262,6 +269,7 @@ create policy history_select on public.company_history for select to authenticat
   using (public.has_company_role(company_id, array['owner', 'editor', 'viewer']));
 
 -- Tablo yetkileri
+grant usage on schema public to authenticated;
 revoke all on public.companies, public.memberships, public.invitations, public.company_history from anon;
 grant select, insert, update, delete on public.companies to authenticated;
 grant select, update, delete on public.memberships to authenticated;
