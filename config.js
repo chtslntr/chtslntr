@@ -6,6 +6,6 @@
    veritabanındaki satır bazlı güvenlik kurallarıyla korunur.
    ASLA "service_role / secret" anahtarını buraya yazmayın. */
 window.HD_CONFIG = {
-  supabaseUrl: '',      // örn. 'https://abcdefghijklmnop.supabase.co'
-  supabaseAnonKey: '',  // örn. 'eyJhbGciOi...' ya da 'sb_publishable_...'
+  supabaseUrl: 'https://msauyjzopyonapljrwox.supabase.co',
+  supabaseAnonKey: 'sb_publishable_xzyBWAd18rORcfe1tf2j6w_nVNUxM-a',
 };
