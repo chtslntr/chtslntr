@@ -21,7 +21,7 @@
       </svg>
       <div>
         <div class="brand-name">Hisse Defteri</div>
-        <div class="company-name" id="companyLabel">—</div>
+        <div class="company-name local-only" id="companyLabel">—</div>
       </div>
     </div>
     <nav class="tabs" role="tablist">
@@ -31,8 +31,14 @@
       <button class="tab" data-tab="vesting" role="tab">Vesting</button>
       <button class="tab" data-tab="round" role="tab">Tur Simülasyonu</button>
       <button class="tab" data-tab="exit" role="tab">Çıkış Analizi</button>
+      <button class="tab remote-only" data-tab="team" role="tab">Ekip</button>
       <button class="tab" data-tab="settings" role="tab">Ayarlar</button>
     </nav>
+    <div class="account remote-only">
+      <select id="companySelect" aria-label="Şirket seçin"></select>
+      <span class="save-status" id="saveStatus" aria-live="polite"></span>
+      <span class="role-badge pill" id="roleBadge"></span>
+    </div>
     <button class="theme-toggle" id="themeToggle" title="Tema değiştir" aria-label="Tema değiştir">
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>
     </button>
@@ -64,7 +70,7 @@
 
     <!-- HİSSEDARLAR -->
     <section class="panel" id="tab-stakeholders">
-      <div class="card">
+      <div class="card edit-only">
         <div class="card-head"><h2>Yeni hissedar</h2></div>
         <form id="stakeholderForm" class="form-grid">
           <label>Ad Soyad / Unvan<input name="name" required placeholder="Ayşe Yılmaz"></label>
@@ -88,7 +94,7 @@
 
     <!-- İŞLEMLER -->
     <section class="panel" id="tab-ledger">
-      <div class="card">
+      <div class="card edit-only">
         <div class="card-head"><h2>Yeni işlem</h2></div>
         <form id="issuanceForm" class="form-grid">
           <label>Hissedar<select name="stakeholderId" required></select></label>
@@ -140,7 +146,7 @@
         </form>
         <div id="roundSummary" class="kpis compact"></div>
         <div class="table-wrap"><table class="table" id="roundTable"></table></div>
-        <div class="form-actions right">
+        <div class="form-actions right edit-only">
           <button class="btn primary" id="applyRound">Turu tabloya uygula</button>
         </div>
       </div>
@@ -171,9 +177,50 @@
       </div>
     </section>
 
+    <!-- EKİP -->
+    <section class="panel" id="tab-team">
+      <div class="card owner-only">
+        <div class="card-head"><h2>Ekip üyesi davet et</h2></div>
+        <form id="inviteForm" class="form-grid">
+          <label>E-posta<input name="email" type="email" required placeholder="ortak@firma.com"></label>
+          <label>Rol
+            <select name="role">
+              <option value="viewer">İzleyici: yalnızca görüntüler</option>
+              <option value="editor">Düzenleyici: kayıt ekler ve değiştirir</option>
+              <option value="owner">Sahip: ekibi de yönetir</option>
+            </select>
+          </label>
+          <div class="form-actions"><button class="btn primary" type="submit">Davet et</button></div>
+        </form>
+        <p class="muted small">Davet edilen kişi bu siteye aynı e-posta adresiyle giriş yaptığında şirkete otomatik olarak eklenir. Site adresini kendisine iletmeniz yeterli: <a id="siteLink" href="#"></a></p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Ekip</h2><button class="btn ghost" id="refreshTeam">Yenile</button></div>
+        <div class="table-wrap"><table class="table" id="memberTable"></table></div>
+      </div>
+      <div class="card owner-only" id="inviteCard">
+        <div class="card-head"><h2>Bekleyen davetler</h2></div>
+        <div class="table-wrap"><table class="table" id="inviteTable"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Son değişiklikler</h2></div>
+        <div class="table-wrap"><table class="table" id="historyTable"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Hesap ve şirketler</h2></div>
+        <p class="muted" id="accountInfo"></p>
+        <div class="button-row">
+          <button class="btn" id="newCompany">Yeni şirket oluştur</button>
+          <button class="btn" id="leaveCompany">Bu şirketten ayrıl</button>
+          <button class="btn danger owner-only" id="deleteCompany">Şirketi sil</button>
+          <button class="btn" id="signOut">Çıkış yap</button>
+        </div>
+      </div>
+    </section>
+
     <!-- AYARLAR -->
     <section class="panel" id="tab-settings">
-      <div class="card">
+      <div class="card edit-only">
         <div class="card-head"><h2>Şirket</h2></div>
         <form id="companyForm" class="form-grid">
           <label>Şirket adı<input name="name" required></label>
@@ -190,7 +237,7 @@
       </div>
       <div class="card">
         <div class="card-head"><h2>Pay sınıfları</h2></div>
-        <form id="classForm" class="form-grid">
+        <form id="classForm" class="form-grid edit-only">
           <label>Sınıf adı<input name="name" required placeholder="Seri A İmtiyazlı"></label>
           <label>Tür
             <select name="kind">
@@ -205,20 +252,69 @@
       </div>
       <div class="card">
         <div class="card-head"><h2>Veri</h2></div>
-        <p class="muted">Verileriniz yalnızca bu tarayıcıda saklanır. Yedek almak için dışa aktarın.</p>
+        <p class="muted local-only">Verileriniz yalnızca bu tarayıcıda saklanır. Yedek almak için dışa aktarın.</p>
+        <p class="muted remote-only">Veriler bulutta saklanır ve ekibinizle paylaşılır. İsterseniz bir yedeği JSON olarak indirebilirsiniz.</p>
         <div class="button-row">
           <button class="btn" id="exportJson">JSON dışa aktar</button>
-          <label class="btn">JSON içe aktar<input type="file" id="importJson" accept="application/json" hidden></label>
-          <button class="btn" id="loadDemo">Örnek veri yükle</button>
-          <button class="btn danger" id="resetAll">Tümünü sil</button>
+          <label class="btn edit-only">JSON içe aktar<input type="file" id="importJson" accept="application/json" hidden></label>
+          <button class="btn edit-only" id="loadDemo">Örnek veri yükle</button>
+          <button class="btn danger edit-only" id="resetAll">Tümünü sil</button>
         </div>
       </div>
     </section>
   </main>
 
+  <div class="gate" id="gate" hidden>
+    <div class="gate-card">
+      <div class="brand gate-brand">
+        <svg width="32" height="32" viewBox="0 0 28 28" aria-hidden="true">
+          <rect x="2" y="2" width="24" height="24" rx="7" fill="var(--accent)"/>
+          <rect x="7" y="15" width="3" height="6" rx="1.5" fill="#fff"/>
+          <rect x="12.5" y="11" width="3" height="10" rx="1.5" fill="#fff"/>
+          <rect x="18" y="7" width="3" height="14" rx="1.5" fill="#fff"/>
+        </svg>
+        <div class="brand-name">Hisse Defteri</div>
+      </div>
+      <div data-gate="loading"><p class="muted">Yükleniyor…</p></div>
+      <div data-gate="login">
+        <h1>Giriş yapın</h1>
+        <p class="muted">E-posta adresinize tek kullanımlık bir giriş bağlantısı göndereceğiz. Şifre gerekmez.</p>
+        <form id="loginForm" class="stack-form">
+          <label>E-posta<input name="email" type="email" required autocomplete="email" placeholder="siz@firma.com"></label>
+          <button class="btn primary" type="submit">Giriş bağlantısı gönder</button>
+        </form>
+      </div>
+      <div data-gate="sent">
+        <h1>E-postanızı kontrol edin</h1>
+        <p class="muted"><b id="sentTo"></b> adresine bir giriş bağlantısı gönderdik. Bağlantıya bu cihazda tıklayın.</p>
+        <button class="btn" id="backToLogin">Farklı e-posta kullan</button>
+      </div>
+      <div data-gate="company">
+        <h1 id="companyGateTitle">İlk şirketinizi oluşturun</h1>
+        <p class="muted" id="companyGateText">Bir ekip üyesinden davet bekliyorsanız, davet gönderildikten sonra sayfayı yenileyin.</p>
+        <form id="createCompanyForm" class="stack-form">
+          <label>Şirket adı<input name="name" required placeholder="Örnek Teknoloji A.Ş."></label>
+          <label class="check"><input type="checkbox" name="demo"> Örnek verilerle başla</label>
+          <button class="btn primary" type="submit">Oluştur</button>
+        </form>
+        <div class="button-row gate-foot">
+          <button class="btn ghost" id="cancelCreate" hidden>Vazgeç</button>
+          <button class="btn ghost" id="gateSignOut">Çıkış yap</button>
+        </div>
+      </div>
+      <div data-gate="error">
+        <h1>Bağlantı kurulamadı</h1>
+        <p class="muted" id="gateError"></p>
+        <button class="btn" onclick="location.reload()">Tekrar dene</button>
+      </div>
+    </div>
+  </div>
+
   <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
   <div class="toast" id="toast" hidden></div>
   <script src="calc.js"></script>
+  <script src="config.js"></script>
+  <script src="backend.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

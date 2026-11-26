@@ -69,11 +69,16 @@
       issuances: Array.isArray(s.issuances) ? s.issuances : [],
     };
   }
+  const REMOTE = Boolean(window.Backend && window.Backend.enabled);
+  let role = 'owner';      // bulut modunda: owner | editor | viewer
+  let lastLoaded = null;   // izleyicinin yanlışlıkla yaptığı değişiklikleri geri almak için
+
   function save() {
+    if (REMOTE) { window.Backend.save(state); return; }
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* yok say */ }
   }
 
-  let state = load();
+  let state = REMOTE ? emptyState() : load();
 
   // ---------- Biçimlendirme ----------
   const nf = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 });
@@ -226,7 +231,7 @@
           <td class="muted">${esc(s.email) || '—'}</td>
           <td class="num">${fmtN(byId[s.id].total)}</td>
           <td class="num">${fmtPct(c.fullyDiluted ? byId[s.id].total / c.fullyDiluted : 0)}</td>
-          <td class="num"><button class="btn icon danger" data-del-stakeholder="${s.id}">Sil</button></td>
+          <td class="num"><button class="btn icon danger edit-only" data-del-stakeholder="${s.id}">Sil</button></td>
         </tr>`).join('')}</tbody>`;
   }
 
@@ -262,7 +267,7 @@
           <td class="num">${i.price ? fmtMoney(i.shares * i.price, true) : '—'}</td>
           <td class="muted">${i.vesting && i.vesting.months ? `${i.vesting.months} ay / ${i.vesting.cliff || 0} ay cliff` : '—'}</td>
           <td class="muted">${esc(i.note) || ''}</td>
-          <td class="num"><button class="btn icon danger" data-del-issuance="${i.id}">Sil</button></td>
+          <td class="num"><button class="btn icon danger edit-only" data-del-issuance="${i.id}">Sil</button></td>
         </tr>`;
       }).join('')}</tbody>`;
   }
@@ -347,7 +352,7 @@
             <option value="1" ${k.participating ? 'selected' : ''}>Katılımlı</option></select></td>
           <td class="num"><input class="cell" type="number" min="1" step="1" value="${k.seniority || 1}" data-class-field="seniority" data-class-id="${k.id}" aria-label="Kıdem"></td>`
         : '<td class="num muted">—</td><td class="muted">—</td><td class="num muted">—</td>'}
-        <td class="num">${used.has(k.id) ? '<span class="muted small">Kullanımda</span>' : `<button class="btn icon danger" data-del-class="${k.id}">Sil</button>`}</td></tr>`).join('')}</tbody>`;
+        <td class="num">${used.has(k.id) ? '<span class="muted small">Kullanımda</span>' : `<button class="btn icon danger edit-only" data-del-class="${k.id}">Sil</button>`}</td></tr>`).join('')}</tbody>`;
   }
 
   // ---------- Vesting ----------
@@ -476,7 +481,15 @@
     renderExit(c);
     renderSettings();
   }
-  function commit(msg) { save(); render(); if (msg) toast(msg); }
+  function commit(msg) {
+    if (REMOTE && role === 'viewer') {
+      if (lastLoaded) state = normalize(JSON.parse(lastLoaded));
+      render();
+      toast('Bu şirkette yalnızca görüntüleme yetkiniz var.');
+      return;
+    }
+    save(); render(); if (msg) toast(msg);
+  }
 
   let toastTimer;
   function toast(msg) {
@@ -502,6 +515,7 @@
     document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
     document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
     try { localStorage.setItem('hisse-defteri:tab', name); } catch (e) { /* yok say */ }
+    if (name === 'team' && REMOTE) renderTeam();
   }
 
   function download(name, text, type) {
@@ -642,10 +656,18 @@
       e.target.value = '';
     });
     document.getElementById('loadDemo').addEventListener('click', () => {
-      if (confirm('Mevcut verilerin yerine örnek veri yüklensin mi?')) { state = demoState(); commit('Örnek veri yüklendi.'); }
+      if (!confirm('Mevcut verilerin yerine örnek veri yüklensin mi?')) return;
+      const name = state.company.name;
+      state = demoState();
+      if (REMOTE) state.company.name = name;
+      commit('Örnek veri yüklendi.');
     });
     document.getElementById('resetAll').addEventListener('click', () => {
-      if (confirm('Tüm veriler silinecek. Emin misiniz?')) { state = emptyState(); commit('Tüm veriler silindi.'); }
+      if (!confirm('Tüm veriler silinecek. Emin misiniz?')) return;
+      const name = state.company.name;
+      state = emptyState();
+      if (REMOTE) state.company.name = name;
+      commit('Tüm veriler silindi.');
     });
 
     document.getElementById('themeToggle').addEventListener('click', () => {
@@ -656,13 +678,183 @@
     });
   }
 
+
+  // ---------- Bulut modu (Supabase) ----------
+  const ROLE_LABELS = { owner: 'Sahip', editor: 'Düzenleyici', viewer: 'İzleyici' };
+  const B = window.Backend;
+  const gate = document.getElementById('gate');
+  const gateCard = gate.querySelector('.gate-card');
+
+  function showGate(which, opts) {
+    gateCard.dataset.state = which;
+    gate.hidden = false;
+    if (which === 'error') document.getElementById('gateError').textContent = (opts && opts.message) || '';
+    if (which === 'company') {
+      const first = !(B.companies.length);
+      document.getElementById('companyGateTitle').textContent = first ? 'İlk şirketinizi oluşturun' : 'Yeni şirket oluşturun';
+      document.getElementById('companyGateText').hidden = !first;
+      document.getElementById('cancelCreate').hidden = first;
+      document.getElementById('createCompanyForm').reset();
+    }
+  }
+  function hideGate() { gate.hidden = true; }
+
+  function setSaveStatus(st, msg) {
+    const el = document.getElementById('saveStatus');
+    el.classList.toggle('error', st === 'error');
+    el.textContent = { pending: 'Kaydedilmedi…', saving: 'Kaydediliyor…', saved: 'Kaydedildi ✓', error: 'Kaydedilemedi', conflict: '' }[st] || '';
+    if (st === 'error') toast('Kaydedilemedi: ' + (msg || 'bilinmeyen hata'));
+    if (st === 'conflict') toast('Başka bir ekip üyesi aynı anda değişiklik yaptı. En güncel sürüm yüklendi; son değişikliğinizi tekrar yapın.');
+  }
+
+  function fillCompanySelect(list) {
+    const sel = document.getElementById('companySelect');
+    const cur = B.current;
+    sel.innerHTML = list.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('') +
+      '<option value="__new">+ Yeni şirket…</option>';
+    if (cur) sel.value = cur.id;
+  }
+
+  async function renderTeam() {
+    const cur = B.current;
+    if (!cur) return;
+    document.getElementById('siteLink').textContent = location.origin + location.pathname;
+    document.getElementById('siteLink').href = location.origin + location.pathname;
+    const me = B.user;
+    document.getElementById('accountInfo').textContent = `${me ? me.email : ''} olarak giriş yaptınız · ${cur.name} şirketindeki rolünüz: ${ROLE_LABELS[cur.role]}`;
+    let team, hist;
+    try { [team, hist] = await Promise.all([B.listTeam(), B.history(15)]); }
+    catch (e) { toast(e.message); return; }
+    const isOwner = cur.role === 'owner';
+    document.getElementById('memberTable').innerHTML = `
+      <thead><tr><th>E-posta</th><th>Rol</th><th>Katılma</th><th></th></tr></thead>
+      <tbody>${team.members.map((m) => `<tr>
+        <td>${esc(m.email || '—')}${me && m.user_id === me.id ? ' <span class="pill">siz</span>' : ''}</td>
+        <td>${isOwner ? `<select class="cell" data-member-role="${m.user_id}" aria-label="Rol">
+            ${Object.entries(ROLE_LABELS).map(([k, l]) => `<option value="${k}" ${k === m.role ? 'selected' : ''}>${l}</option>`).join('')}</select>`
+          : ROLE_LABELS[m.role]}</td>
+        <td class="muted">${esc((m.created_at || '').slice(0, 10))}</td>
+        <td class="num">${isOwner && !(me && m.user_id === me.id) ? `<button class="btn icon danger" data-remove-member="${m.user_id}">Çıkar</button>` : ''}</td>
+      </tr>`).join('')}</tbody>`;
+    document.getElementById('inviteTable').innerHTML = team.invites.length ? `
+      <thead><tr><th>E-posta</th><th>Rol</th><th>Tarih</th><th></th></tr></thead>
+      <tbody>${team.invites.map((i) => `<tr><td>${esc(i.email)}</td><td>${ROLE_LABELS[i.role]}</td>
+        <td class="muted">${esc((i.created_at || '').slice(0, 10))}</td>
+        <td class="num"><button class="btn icon danger" data-cancel-invite="${i.id}">İptal</button></td></tr>`).join('')}</tbody>`
+      : '<tbody><tr><td class="empty">Bekleyen davet yok.</td></tr></tbody>';
+    const who = Object.fromEntries(team.members.map((m) => [m.user_id, m.email]));
+    document.getElementById('historyTable').innerHTML = hist.length ? `
+      <thead><tr><th class="num">Sürüm</th><th>Tarih</th><th>Değiştiren</th></tr></thead>
+      <tbody>${hist.map((x) => `<tr><td class="num">${x.version}</td>
+        <td>${esc(new Date(x.changed_at).toLocaleString('tr-TR'))}</td>
+        <td class="muted">${esc(who[x.changed_by] || '—')}</td></tr>`).join('')}</tbody>`
+      : '<tbody><tr><td class="empty">Henüz değişiklik kaydı yok.</td></tr></tbody>';
+  }
+
+  async function guarded(fn, okMsg) {
+    try { await fn(); if (okMsg) toast(okMsg); }
+    catch (e) { toast(e.message || String(e)); }
+  }
+
+  function bindRemote() {
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = e.target.email.value.trim();
+      const btn = e.target.querySelector('button');
+      btn.disabled = true;
+      B.signIn(email)
+        .then(() => { document.getElementById('sentTo').textContent = email; showGate('sent'); })
+        .catch((err) => toast(err.message))
+        .finally(() => { btn.disabled = false; });
+    });
+    document.getElementById('backToLogin').addEventListener('click', () => showGate('login'));
+
+    document.getElementById('createCompanyForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const name = f.name.value.trim();
+      const data = f.demo.checked ? demoState() : emptyState();
+      data.company.name = name;
+      const btn = f.querySelector('button[type=submit]');
+      btn.disabled = true;
+      guarded(() => B.createCompany(name, data), 'Şirket oluşturuldu.').finally(() => { btn.disabled = false; });
+    });
+    document.getElementById('cancelCreate').addEventListener('click', () => { hideGate(); fillCompanySelect(B.companies); });
+    document.getElementById('gateSignOut').addEventListener('click', () => guarded(() => B.signOut()));
+    document.getElementById('signOut').addEventListener('click', () => guarded(() => B.signOut()));
+    document.getElementById('newCompany').addEventListener('click', () => showGate('company'));
+
+    document.getElementById('companySelect').addEventListener('change', (e) => {
+      if (e.target.value === '__new') { showGate('company'); return; }
+      guarded(() => B.openCompany(e.target.value));
+    });
+
+    document.getElementById('inviteForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = e.target;
+      guarded(async () => { await B.invite(f.email.value, f.role.value); f.reset(); await renderTeam(); }, 'Davet oluşturuldu.');
+    });
+    document.getElementById('refreshTeam').addEventListener('click', () => renderTeam());
+    document.getElementById('leaveCompany').addEventListener('click', () => {
+      if (confirm(`${B.current.name} şirketinden ayrılmak istediğinize emin misiniz? Tekrar erişmek için yeni bir davet gerekir.`)) guarded(() => B.leaveCompany(), 'Şirketten ayrıldınız.');
+    });
+    document.getElementById('deleteCompany').addEventListener('click', () => {
+      const name = B.current.name;
+      const typed = prompt(`Bu işlem geri alınamaz. ${name} şirketinin tüm verileri ve geçmişi silinecek.\nOnaylamak için şirket adını yazın:`);
+      if (typed !== null && typed.trim() === name) guarded(() => B.deleteCompany(), 'Şirket silindi.');
+      else if (typed !== null) toast('Şirket adı eşleşmedi; silme iptal edildi.');
+    });
+    document.getElementById('tab-team').addEventListener('click', (e) => {
+      const t = e.target.closest('button');
+      if (!t) return;
+      if (t.dataset.removeMember && confirm('Bu üye şirketten çıkarılsın mı?')) guarded(async () => { await B.removeMember(t.dataset.removeMember); await renderTeam(); }, 'Üye çıkarıldı.');
+      if (t.dataset.cancelInvite) guarded(async () => { await B.cancelInvite(t.dataset.cancelInvite); await renderTeam(); }, 'Davet iptal edildi.');
+    });
+    document.getElementById('tab-team').addEventListener('change', (e) => {
+      const uidv = e.target.dataset && e.target.dataset.memberRole;
+      if (uidv) guarded(async () => { await B.setRole(uidv, e.target.value); await renderTeam(); }, 'Rol güncellendi.')
+        .then(() => renderTeam());
+    });
+  }
+
+  function startRemote() {
+    document.body.classList.add('remote');
+    showGate('loading');
+    bindRemote();
+    B.start({
+      onSignedOut: () => { state = emptyState(); render(); showGate('login'); },
+      onUser: () => {},
+      onCompanies: fillCompanySelect,
+      onNoCompany: () => showGate('company'),
+      onCompany: (data, meta) => {
+        const s = normalize(data && data.company ? data : {});
+        s.company.name = meta.name;
+        state = s;
+        role = meta.role;
+        lastLoaded = JSON.stringify(state);
+        document.body.classList.toggle('readonly', role === 'viewer');
+        document.body.classList.toggle('is-owner', role === 'owner');
+        document.getElementById('roleBadge').textContent = ROLE_LABELS[role];
+        document.getElementById('saveStatus').textContent = '';
+        fillCompanySelect(B.companies);
+        hideGate();
+        render();
+        if (meta.external) toast('Bir ekip üyesi değişiklik yaptı; tablo güncellendi.');
+        if (document.getElementById('tab-team').classList.contains('active')) renderTeam();
+      },
+      onSaveStatus: setSaveStatus,
+      onError: (e) => toast(e.message || String(e)),
+    }).catch((e) => showGate('error', { message: e.message || String(e) }));
+  }
+
   // ---------- Başlat ----------
   try {
     const th = localStorage.getItem(THEME_KEY);
     if (th) document.documentElement.dataset.theme = th;
     const tab = localStorage.getItem('hisse-defteri:tab');
-    if (tab && document.getElementById('tab-' + tab)) switchTab(tab);
+    if (tab && document.getElementById('tab-' + tab) && (REMOTE || tab !== 'team')) switchTab(tab);
   } catch (e) { /* yok say */ }
   bind();
-  render();
+  if (REMOTE) startRemote();
+  else { document.body.classList.add('is-owner'); render(); }
 })();

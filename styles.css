@@ -201,3 +201,40 @@ label.inline { flex-direction: row; align-items: center; gap: 8px; }
   .kpi { padding: 12px; }
   .kpi-value { font-size: 17px; }
 }
+
+/* Çevrimiçi mod */
+body:not(.remote) .remote-only { display: none !important; }
+body.remote .local-only { display: none !important; }
+body:not(.is-owner) .owner-only { display: none !important; }
+body.readonly .edit-only { display: none !important; }
+body.readonly .table select, body.readonly .table input.cell { pointer-events: none; opacity: .7; }
+.account { display: flex; align-items: center; gap: 8px; }
+.account select { max-width: 220px; padding: 6px 8px; font-weight: 500; }
+.save-status { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+.save-status.error { color: var(--danger); }
+.role-badge:empty { display: none; }
+
+.gate {
+  position: fixed; inset: 0; z-index: 40; background: var(--bg);
+  display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto;
+}
+.gate[hidden] { display: none; }
+.gate-card {
+  width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 28px; box-shadow: var(--shadow);
+}
+.gate-card h1 { font-size: 20px; margin: 20px 0 8px; }
+.gate-brand { margin-bottom: 4px; }
+.gate-card [data-gate] { display: none; }
+.gate-card[data-state="loading"] [data-gate="loading"],
+.gate-card[data-state="login"] [data-gate="login"],
+.gate-card[data-state="sent"] [data-gate="sent"],
+.gate-card[data-state="company"] [data-gate="company"],
+.gate-card[data-state="error"] [data-gate="error"] { display: block; }
+.stack-form { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.gate-foot { margin-top: 12px; justify-content: flex-end; }
+
+@media (max-width: 640px) {
+  .account { order: 2; flex-basis: 100%; }
+  .account select { flex: 1; max-width: none; }
+}
